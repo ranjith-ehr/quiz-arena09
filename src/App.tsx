@@ -20,7 +20,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/adminrk" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/quiz/:quizId" element={<QuizEditor />} />
           <Route path="/quizzes" element={<QuizzesList />} />
