@@ -9,6 +9,17 @@ import { toast } from "sonner";
 import { Plus, Edit2, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { z } from "zod";
+
+const categorySchema = z.object({
+  name: z.string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be less than 100 characters"),
+  description: z.string()
+    .max(500, "Description must be less than 500 characters")
+    .optional(),
+});
 
 interface Category {
   id: string;
@@ -60,6 +71,17 @@ const CategoriesManagement = () => {
   };
 
   const handleSaveCategory = async () => {
+    // Validate form data
+    try {
+      categorySchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const firstError = error.errors[0];
+        toast.error(firstError.message);
+        return;
+      }
+    }
+
     try {
       if (editingCategory) {
         const { error } = await supabase
@@ -82,6 +104,22 @@ const CategoriesManagement = () => {
   };
 
   const handleSaveSubcategory = async () => {
+    // Validate form data
+    try {
+      categorySchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const firstError = error.errors[0];
+        toast.error(firstError.message);
+        return;
+      }
+    }
+
+    if (!selectedCategoryId) {
+      toast.error("Please select a category");
+      return;
+    }
+
     try {
       const data = { ...formData, category_id: selectedCategoryId };
       

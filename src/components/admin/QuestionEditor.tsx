@@ -8,6 +8,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon } from "lucide-react";
+import { z } from "zod";
+
+const urlSchema = z.string().url().or(z.literal(""));
+
+const questionSchema = z.object({
+  question_text: z.string()
+    .trim()
+    .min(10, "Question must be at least 10 characters")
+    .max(1000, "Question must be less than 1000 characters"),
+  question_image_url: urlSchema.optional(),
+  explanation: z.string()
+    .max(500, "Explanation must be less than 500 characters")
+    .optional(),
+  correct_option: z.enum(["A", "B", "C", "D"]),
+  options: z.array(z.object({
+    label: z.string(),
+    text: z.string()
+      .trim()
+      .min(1, "Option text is required")
+      .max(200, "Option text must be less than 200 characters"),
+    image_url: urlSchema.optional(),
+  })).length(4, "Must have exactly 4 options"),
+});
 
 interface QuestionEditorProps {
   quizId: string;
@@ -62,14 +85,15 @@ const QuestionEditor = ({ quizId, questions, onUpdate }: QuestionEditorProps) =>
   };
 
   const handleSaveQuestion = async () => {
-    if (!questionForm.question_text) {
-      toast.error("Please enter a question");
-      return;
-    }
-
-    if (questionForm.options.some((opt) => !opt.text)) {
-      toast.error("Please fill in all options");
-      return;
+    // Validate form data
+    try {
+      questionSchema.parse(questionForm);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const firstError = error.errors[0];
+        toast.error(firstError.message);
+        return;
+      }
     }
 
     try {

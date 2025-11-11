@@ -11,6 +11,34 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
 import QuestionEditor from "@/components/admin/QuestionEditor";
+import { z } from "zod";
+
+const quizSchema = z.object({
+  title: z.string()
+    .trim()
+    .min(5, "Title must be at least 5 characters")
+    .max(200, "Title must be less than 200 characters"),
+  description: z.string()
+    .max(500, "Description must be less than 500 characters")
+    .optional(),
+  category_id: z.string().uuid("Please select a category"),
+  subcategory_id: z.string().optional(),
+  num_questions: z.number()
+    .int()
+    .min(1, "Must have at least 1 question")
+    .max(100, "Cannot exceed 100 questions"),
+  time_limit: z.number()
+    .int()
+    .min(1, "Time limit must be at least 1 minute")
+    .max(180, "Time limit cannot exceed 180 minutes"),
+  max_attempts: z.number()
+    .int()
+    .min(1, "Must allow at least 1 attempt")
+    .max(10, "Cannot exceed 10 attempts"),
+  is_premium: z.boolean(),
+  requires_login: z.boolean(),
+  is_active: z.boolean(),
+});
 
 interface QuizFormData {
   title: string;
@@ -134,9 +162,15 @@ const QuizEditor = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.title || !formData.category_id) {
-      toast.error("Please fill in all required fields");
-      return;
+    // Validate form data
+    try {
+      quizSchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const firstError = error.errors[0];
+        toast.error(firstError.message);
+        return;
+      }
     }
 
     setSaving(true);
