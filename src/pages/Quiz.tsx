@@ -188,10 +188,16 @@ const Quiz = () => {
   if (!quiz || questions.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted flex items-center justify-center">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Quiz not available</p>
-            <Button className="mt-4" onClick={() => navigate("/quizzes")}>
+        <Card className="max-w-md">
+          <CardContent className="py-12 text-center space-y-4">
+            <div className="text-4xl">📝</div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Quiz Not Ready</h3>
+              <p className="text-muted-foreground">
+                {!quiz ? "Quiz not found" : "This quiz has no questions yet. Please contact the administrator to add questions."}
+              </p>
+            </div>
+            <Button onClick={() => navigate("/quizzes")}>
               Back to Quizzes
             </Button>
           </CardContent>
