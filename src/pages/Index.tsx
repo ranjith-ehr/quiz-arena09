@@ -50,7 +50,7 @@ const Index = () => {
               Start Practicing
               <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/dashboard")}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/auth?redirect=/quizzes")}>
               View Dashboard
             </Button>
           </div>

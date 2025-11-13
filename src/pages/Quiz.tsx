@@ -91,6 +91,16 @@ const Quiz = () => {
         return;
       }
 
+      // Check if login is required
+      if (quizData.requires_login) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          toast.error("Please login to take this quiz");
+          navigate(`/auth?redirect=/quiz/${quizId}`);
+          return;
+        }
+      }
+
       setQuiz(quizData);
       setTimeRemaining(quizData.time_limit * 60); // Convert minutes to seconds
 
