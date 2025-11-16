@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Clock, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { Navbar } from "@/components/Navbar";
 
 const QuizzesList = () => {
   const navigate = useNavigate();
@@ -39,16 +40,7 @@ const QuizzesList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate("/")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Home
-          </Button>
-          <h1 className="text-xl font-bold">Browse Quizzes</h1>
-          <div className="w-20"></div>
-        </div>
-      </header>
+      <Navbar />
 
       <div className="container mx-auto px-4 py-8">
         {loading ? (
