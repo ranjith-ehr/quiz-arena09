@@ -17,6 +17,8 @@ interface QuizQuestion {
   question_image_url: string | null;
   order_num: number;
   explanation: string | null;
+  section_number: number | null;
+  section_name: string | null;
   options: Array<{
     id: string;
     option_label: string;
@@ -220,6 +222,22 @@ const Quiz = () => {
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
   const answeredCount = Object.keys(answers).length;
 
+  // Group questions by section
+  const questionsBySections = questions.reduce((acc, q, idx) => {
+    const sectionNum = q.section_number || 1;
+    if (!acc[sectionNum]) {
+      acc[sectionNum] = {
+        name: q.section_name || `Section ${sectionNum}`,
+        questions: []
+      };
+    }
+    acc[sectionNum].questions.push({ ...q, index: idx });
+    return acc;
+  }, {} as Record<number, { name: string; questions: Array<QuizQuestion & { index: number }> }>);
+
+  const sections = Object.entries(questionsBySections)
+    .sort(([a], [b]) => Number(a) - Number(b));
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       {/* Header */}
@@ -247,6 +265,28 @@ const Quiz = () => {
             </div>
           </div>
           <Progress value={progress} className="mt-3 h-2" />
+          
+          {/* Question Navigator */}
+          <div className="mt-4 space-y-3">
+            {sections.map(([sectionNum, section]) => (
+              <div key={sectionNum} className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">{section.name}</p>
+                <div className="flex flex-wrap gap-2">
+                  {section.questions.map((q) => (
+                    <Button
+                      key={q.id}
+                      variant={currentQuestionIndex === q.index ? "default" : answers[q.id] ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentQuestionIndex(q.index)}
+                      className="w-10 h-10 p-0"
+                    >
+                      {q.index + 1}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -323,28 +363,6 @@ const Quiz = () => {
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Question Navigator */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-sm">Question Navigator</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-8 gap-2">
-              {questions.map((q, idx) => (
-                <Button
-                  key={q.id}
-                  variant={currentQuestionIndex === idx ? "default" : answers[q.id] ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentQuestionIndex(idx)}
-                  className="w-full"
-                >
-                  {idx + 1}
-                </Button>
-              ))}
             </div>
           </CardContent>
         </Card>
