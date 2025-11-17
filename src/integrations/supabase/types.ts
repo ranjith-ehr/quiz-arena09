@@ -152,6 +152,8 @@ export type Database = {
           question_image_url: string | null
           question_text: string
           quiz_id: string
+          section_name: string | null
+          section_number: number | null
           updated_at: string
         }
         Insert: {
@@ -163,6 +165,8 @@ export type Database = {
           question_image_url?: string | null
           question_text: string
           quiz_id: string
+          section_name?: string | null
+          section_number?: number | null
           updated_at?: string
         }
         Update: {
@@ -174,6 +178,8 @@ export type Database = {
           question_image_url?: string | null
           question_text?: string
           quiz_id?: string
+          section_name?: string | null
+          section_number?: number | null
           updated_at?: string
         }
         Relationships: [

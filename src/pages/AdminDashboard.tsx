@@ -8,7 +8,7 @@ import { BookOpen, LogOut, Users, FileText, BarChart3, PlusCircle } from "lucide
 import { toast } from "sonner";
 import CategoriesManagement from "@/components/admin/CategoriesManagement";
 import QuizzesManagement from "@/components/admin/QuizzesManagement";
-import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
+import AdminAnalyticsDashboard from "@/components/admin/AdminAnalyticsDashboard";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -169,7 +169,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="analytics">
-            <AnalyticsDashboard />
+            <AdminAnalyticsDashboard />
           </TabsContent>
         </Tabs>
       </div>

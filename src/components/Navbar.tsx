@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BookOpen, LogOut, User } from "lucide-react";
+import { BookOpen, LogOut, User, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 
 export const Navbar = () => {

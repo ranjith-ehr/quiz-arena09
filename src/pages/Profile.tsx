@@ -84,11 +84,67 @@ const Profile = () => {
     }
   };
 
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Calculate new dimensions to maintain aspect ratio
+          const maxSize = 1024;
+          if (width > height && width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: "image/jpeg",
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            0.85
+          );
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const uploadAvatar = async () => {
     if (!avatarFile || !user) return null;
 
     setUploading(true);
     try {
+      let fileToUpload = avatarFile;
+
+      // Compress if larger than 2MB
+      if (avatarFile.size > 2 * 1024 * 1024) {
+        fileToUpload = await compressImage(avatarFile);
+        toast.info("Image compressed to optimize size");
+      }
+
       // Delete old avatar if exists
       if (profile?.avatar_url) {
         const oldPath = profile.avatar_url.split("/").slice(-2).join("/");
@@ -96,12 +152,12 @@ const Profile = () => {
       }
 
       // Upload new avatar
-      const fileExt = avatarFile.name.split(".").pop();
+      const fileExt = fileToUpload.name.split(".").pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, avatarFile);
+        .upload(fileName, fileToUpload);
 
       if (uploadError) throw uploadError;
 
@@ -121,9 +177,10 @@ const Profile = () => {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate inputs
+    // Validate inputs (email removed)
     try {
-      profileSchema.parse({ fullName, email });
+      const nameSchema = z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters");
+      nameSchema.parse(fullName);
     } catch (error) {
       if (error instanceof z.ZodError) {
         error.errors.forEach((err) => toast.error(err.message));
@@ -154,16 +211,6 @@ const Profile = () => {
 
       if (profileError) throw profileError;
 
-      // Update email if changed
-      if (email !== user.email) {
-        const { error: emailError } = await supabase.auth.updateUser({
-          email: email,
-        });
-
-        if (emailError) throw emailError;
-        toast.info("Email update confirmation sent. Please check your inbox.");
-      }
-
       toast.success("Profile updated successfully!");
       await loadProfile(user.id);
       setAvatarFile(null);
@@ -171,6 +218,24 @@ const Profile = () => {
       toast.error("Failed to update profile: " + error.message);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      toast.error("No email found");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      });
+
+      if (error) throw error;
+      toast.success("Password reset link sent to your email!");
+    } catch (error: any) {
+      toast.error("Failed to send reset link: " + error.message);
     }
   };
 
@@ -248,19 +313,34 @@ const Profile = () => {
                 />
               </div>
 
-              {/* Email Field */}
+              {/* Email Field (Read-only) */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  disabled
+                  className="bg-muted cursor-not-allowed"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Changing your email will require verification
+                  Email cannot be changed. Contact support if needed.
+                </p>
+              </div>
+
+              {/* Password Reset */}
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePasswordReset}
+                  className="w-full"
+                >
+                  Send Password Reset Link
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Reset link will be sent to your registered email
                 </p>
               </div>
 
