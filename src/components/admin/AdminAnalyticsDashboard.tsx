@@ -141,27 +141,28 @@ const AdminAnalyticsDashboard = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("quiz_attempts")
-        .select(`
-          *,
-          profiles(full_name)
-        `)
+        .select("*")
         .eq("quiz_id", quizId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Get user emails separately
-      const attemptsWithEmails = await Promise.all(
+      // Get user details separately
+      const attemptsWithUserData = await Promise.all(
         (data || []).map(async (attempt) => {
           if (attempt.user_id) {
+            const { data: profileData } = await supabase
+              .from("profiles")
+              .select("full_name")
+              .eq("id", attempt.user_id)
+              .single();
+            
             const { data: userData } = await supabase.auth.admin.getUserById(attempt.user_id);
+            
             return {
               ...attempt,
-              profiles: attempt.profiles ? {
-                ...attempt.profiles,
-                email: userData?.user?.email || "N/A",
-              } : {
-                full_name: "N/A",
+              profiles: {
+                full_name: profileData?.full_name || "N/A",
                 email: userData?.user?.email || "N/A",
               },
             };
@@ -170,7 +171,7 @@ const AdminAnalyticsDashboard = () => {
         })
       );
 
-      setQuizAttempts(attemptsWithEmails);
+      setQuizAttempts(attemptsWithUserData);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
