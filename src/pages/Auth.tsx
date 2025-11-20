@@ -21,28 +21,40 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isResetPassword, setIsResetPassword] = useState(false);
+  const [isUpdatePassword, setIsUpdatePassword] = useState(false);
 
   const redirectTo = searchParams.get("redirect") || "/quizzes";
+  const resetToken = searchParams.get("reset");
 
   useEffect(() => {
+    // Check if this is a password reset callback
+    if (resetToken === "true") {
+      setIsUpdatePassword(true);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+      if (session && !isUpdatePassword) {
         navigate(redirectTo);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsUpdatePassword(true);
+      } else if (session && (event === "SIGNED_IN" || event === "USER_UPDATED") && !isUpdatePassword) {
         navigate(redirectTo);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, redirectTo]);
+  }, [navigate, redirectTo, resetToken, isUpdatePassword]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +122,44 @@ const Auth = () => {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!newPassword || !confirmPassword) {
+        toast.error("Please enter both password fields");
+        setLoading(false);
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        toast.error("Password must be at least 6 characters");
+        setLoading(false);
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        toast.error("Passwords do not match");
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+      toast.success("Password updated successfully!");
+      setIsUpdatePassword(false);
+      navigate("/auth");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
@@ -145,10 +195,18 @@ const Auth = () => {
         <Card>
           <CardHeader>
             <CardTitle>
-              {isResetPassword ? "Reset Password" : isSignUp ? "Create an account" : "Welcome back"}
+              {isUpdatePassword 
+                ? "Update Password" 
+                : isResetPassword 
+                ? "Reset Password" 
+                : isSignUp 
+                ? "Create an account" 
+                : "Welcome back"}
             </CardTitle>
             <CardDescription>
-              {isResetPassword
+              {isUpdatePassword
+                ? "Enter your new password"
+                : isResetPassword
                 ? "Enter your email to receive a password reset link"
                 : isSignUp
                 ? "Sign up to track your progress and compete"
@@ -156,7 +214,37 @@ const Auth = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!isResetPassword && (
+            {isUpdatePassword ? (
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "Updating..." : "Update Password"}
+                </Button>
+              </form>
+            ) : !isResetPassword && (
               <>
                 <Button
                   variant="outline"
@@ -196,7 +284,9 @@ const Auth = () => {
               </>
             )}
 
-            <form onSubmit={isResetPassword ? handlePasswordReset : handleEmailAuth} className="space-y-4">
+            {!isUpdatePassword && (
+
+              <form onSubmit={isResetPassword ? handlePasswordReset : handleEmailAuth} className="space-y-4">
               {isSignUp && !isResetPassword && (
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
@@ -246,7 +336,8 @@ const Auth = () => {
                   ? "Create Account"
                   : "Sign In"}
               </Button>
-            </form>
+              </form>
+            )}
 
             <div className="space-y-2 text-center text-sm">
               {!isResetPassword ? (

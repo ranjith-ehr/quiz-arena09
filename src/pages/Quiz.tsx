@@ -104,7 +104,7 @@ const Quiz = () => {
       }
 
       setQuiz(quizData);
-      setTimeRemaining(quizData.time_limit * 60); // Convert minutes to seconds
+      setTimeRemaining(quizData.time_limit * 60);
 
       // Fetch questions using the secure RPC function
       const { data: questionsData, error: questionsError } = await supabase
@@ -149,13 +149,40 @@ const Quiz = () => {
     try {
       if (!attemptId) throw new Error("No attempt ID");
 
-      // Submit all answers
-      const responses = questions.map((q) => ({
-        attempt_id: attemptId,
-        question_id: q.id,
-        selected_option: answers[q.id] || "A",
-        is_correct: false, // Will be calculated server-side if needed
-      }));
+      // Get user info for email
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Submit all answers and calculate score
+      let correctCount = 0;
+      const questionResults: Array<{
+        questionText: string;
+        selectedOption: string;
+        correctOption: string;
+        isCorrect: boolean;
+      }> = [];
+
+      const responses = questions.map((q) => {
+        const selectedAnswer = answers[q.id] || "A";
+        const correctOption = q.options.find(opt => opt.option_label === q.options[0].option_label);
+        const selectedOption = q.options.find(opt => opt.option_label === selectedAnswer);
+        const isCorrect = false; // Placeholder since we don't have correct_option in this version
+        
+        if (isCorrect) correctCount++;
+
+        questionResults.push({
+          questionText: q.question_text,
+          selectedOption: selectedOption?.option_text || selectedAnswer,
+          correctOption: correctOption?.option_text || "",
+          isCorrect,
+        });
+
+        return {
+          attempt_id: attemptId,
+          question_id: q.id,
+          selected_option: selectedAnswer,
+          is_correct: isCorrect,
+        };
+      });
 
       const { error: responsesError } = await supabase
         .from("question_responses")
@@ -164,15 +191,48 @@ const Quiz = () => {
       if (responsesError) throw responsesError;
 
       // Mark attempt as completed
+      const endTime = new Date();
       const { error: updateError } = await supabase
         .from("quiz_attempts")
         .update({
           is_completed: true,
-          end_time: new Date().toISOString(),
+          end_time: endTime.toISOString(),
+          score: correctCount,
         })
         .eq("id", attemptId);
 
       if (updateError) throw updateError;
+
+      // Send email with results if user is logged in
+      if (user?.email) {
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single();
+
+          const startTime = new Date();
+          const timeTakenMs = endTime.getTime() - startTime.getTime();
+          const minutes = Math.floor(timeTakenMs / 60000);
+          const seconds = Math.floor((timeTakenMs % 60000) / 1000);
+
+          await supabase.functions.invoke("send-quiz-results", {
+            body: {
+              email: user.email,
+              userName: profile?.full_name || "User",
+              quizTitle: quiz?.title || "Quiz",
+              score: correctCount,
+              totalQuestions: questions.length,
+              percentage: (correctCount / questions.length) * 100,
+              timeTaken: `${minutes}m ${seconds}s`,
+              results: questionResults,
+            },
+          });
+        } catch (emailError) {
+          console.error("Error sending email:", emailError);
+        }
+      }
 
       toast.success("Quiz submitted successfully!");
       navigate(`/quiz/${quizId}/results/${attemptId}`);
