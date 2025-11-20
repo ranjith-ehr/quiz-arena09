@@ -1,11 +1,104 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, BookOpen, Clock, Award, BarChart3 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowRight, BookOpen, Clock, Award, BarChart3, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [categories, setCategories] = useState<any[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [filteredQuizzes, setFilteredQuizzes] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadCategories();
+    loadQuizzes();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCategory !== "all") {
+      loadSubcategories(selectedCategory);
+    } else {
+      setSubcategories([]);
+      setSelectedSubcategory("all");
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    filterQuizzes();
+  }, [quizzes, selectedCategory, selectedSubcategory, searchQuery]);
+
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error("Error loading categories:", error);
+    }
+  };
+
+  const loadSubcategories = async (categoryId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("subcategories")
+        .select("*")
+        .eq("category_id", categoryId)
+        .order("name");
+      if (error) throw error;
+      setSubcategories(data || []);
+    } catch (error) {
+      console.error("Error loading subcategories:", error);
+    }
+  };
+
+  const loadQuizzes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("quizzes")
+        .select("*, categories(name)")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setQuizzes(data || []);
+    } catch (error) {
+      console.error("Error loading quizzes:", error);
+    }
+  };
+
+  const filterQuizzes = () => {
+    let filtered = [...quizzes];
+
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter((q) => q.category_id === selectedCategory);
+    }
+
+    if (selectedSubcategory !== "all") {
+      filtered = filtered.filter((q) => q.subcategory_id === selectedSubcategory);
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (q) =>
+          q.title.toLowerCase().includes(query) ||
+          q.description?.toLowerCase().includes(query)
+      );
+    }
+
+    setFilteredQuizzes(filtered);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
@@ -35,11 +128,100 @@ const Index = () => {
               Start Practicing
               <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth?redirect=/quizzes")}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/auth?redirect=/dashboard")}>
               View Dashboard
             </Button>
           </div>
         </div>
+      </section>
+
+      {/* Search and Filter Section */}
+      <section className="container mx-auto px-4 pb-12">
+        <Card className="max-w-4xl mx-auto shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-center">Find Your Perfect Quiz</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <Input
+                placeholder="Search quizzes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Category</label>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Subcategory</label>
+                <Select
+                  value={selectedSubcategory}
+                  onValueChange={setSelectedSubcategory}
+                  disabled={selectedCategory === "all" || subcategories.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Subcategories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subcategories</SelectItem>
+                    {subcategories.map((sub) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {filteredQuizzes.length > 0 && (
+              <div className="pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Found {filteredQuizzes.length} quiz{filteredQuizzes.length !== 1 ? "es" : ""}
+                </p>
+                <div className="grid gap-3 max-h-96 overflow-y-auto">
+                  {filteredQuizzes.map((quiz) => (
+                    <Card
+                      key={quiz.id}
+                      className="cursor-pointer hover:border-primary transition-colors"
+                      onClick={() => navigate(`/quiz/${quiz.id}`)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold">{quiz.title}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {quiz.categories?.name}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm">
+                            <p className="text-muted-foreground">{quiz.num_questions} questions</p>
+                            <p className="text-muted-foreground">{quiz.time_limit} mins</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       {/* Features */}
