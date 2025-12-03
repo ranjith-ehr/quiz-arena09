@@ -177,6 +177,10 @@ const Profile = () => {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("Updating profile for user:", user?.id);
+    console.log("Full name:", fullName);
+    console.log("Current profile:", profile);
+    
     // Validate inputs (email removed)
     try {
       const nameSchema = z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters");
@@ -194,21 +198,28 @@ const Profile = () => {
 
       // Upload avatar if changed
       if (avatarFile) {
+        console.log("Uploading avatar file:", avatarFile.name);
         const uploadedUrl = await uploadAvatar();
+        console.log("Uploaded avatar URL:", uploadedUrl);
         if (uploadedUrl) {
           avatarUrl = uploadedUrl;
         }
       }
 
+      console.log("Updating profile with:", { full_name: fullName, avatar_url: avatarUrl });
+      
       // Update profile
-      const { error: profileError } = await supabase
+      const { data, error: profileError } = await supabase
         .from("profiles")
         .update({
           full_name: fullName,
           avatar_url: avatarUrl,
         })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select();
 
+      console.log("Update result:", { data, error: profileError });
+      
       if (profileError) throw profileError;
 
       toast.success("Profile updated successfully!");
