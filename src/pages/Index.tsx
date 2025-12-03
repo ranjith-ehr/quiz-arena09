@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRight, BookOpen, Clock, Award, BarChart3, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -35,6 +36,8 @@ const Index = () => {
   useEffect(() => {
     filterQuizzes();
   }, [quizzes, selectedCategory, selectedSubcategory, searchQuery]);
+
+  const hasActiveFilters = selectedCategory !== "all" || selectedSubcategory !== "all" || searchQuery.trim() !== "";
 
   const loadCategories = async () => {
     try {
@@ -189,40 +192,65 @@ const Index = () => {
                 </Select>
               </div>
             </div>
-            {filteredQuizzes.length > 0 && (
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Found {filteredQuizzes.length} quiz{filteredQuizzes.length !== 1 ? "es" : ""}
-                </p>
-                <div className="grid gap-3 max-h-96 overflow-y-auto">
-                  {filteredQuizzes.map((quiz) => (
-                    <Card
-                      key={quiz.id}
-                      className="cursor-pointer hover:border-primary transition-colors"
-                      onClick={() => navigate(`/quiz/${quiz.id}`)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-semibold">{quiz.title}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {quiz.categories?.name}
-                            </p>
-                          </div>
-                          <div className="text-right text-sm">
-                            <p className="text-muted-foreground">{quiz.num_questions} questions</p>
-                            <p className="text-muted-foreground">{quiz.time_limit} mins</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </section>
+
+      {/* Search Results Section - Separate from filter bar */}
+      {hasActiveFilters && (
+        <section className="container mx-auto px-4 pb-12">
+          <div className="max-w-4xl mx-auto">
+            <h3 className="text-xl font-semibold mb-4">
+              {filteredQuizzes.length > 0 
+                ? `Found ${filteredQuizzes.length} quiz${filteredQuizzes.length !== 1 ? "es" : ""}`
+                : "No quizzes found"}
+            </h3>
+            {filteredQuizzes.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {filteredQuizzes.map((quiz) => (
+                  <Card
+                    key={quiz.id}
+                    className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
+                    onClick={() => navigate(`/quiz/${quiz.id}`)}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg">{quiz.title}</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {quiz.categories?.name}
+                          </p>
+                          {quiz.description && (
+                            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                              {quiz.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right text-sm ml-4">
+                          <Badge variant="outline" className="mb-1">{quiz.num_questions} Q</Badge>
+                          <p className="text-muted-foreground">{quiz.time_limit} mins</p>
+                          {quiz.is_premium && (
+                            <Badge className="mt-1 bg-amber-500">Premium</Badge>
+                          )}
+                          {quiz.requires_login && !quiz.is_premium && (
+                            <Badge variant="secondary" className="mt-1">Login Required</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-muted-foreground">No quizzes match your search criteria. Try adjusting your filters.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
