@@ -214,6 +214,9 @@ const Profile = () => {
       toast.success("Profile updated successfully!");
       await loadProfile(user.id);
       setAvatarFile(null);
+      
+      // Dispatch event to refresh profile in Navbar
+      window.dispatchEvent(new CustomEvent('profile-updated'));
     } catch (error: any) {
       toast.error("Failed to update profile: " + error.message);
     } finally {

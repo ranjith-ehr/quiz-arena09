@@ -38,7 +38,20 @@ export const Navbar = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Listen for profile updates from Profile page
+    const handleProfileUpdate = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          loadProfile(session.user.id);
+        }
+      });
+    };
+    window.addEventListener('profile-updated', handleProfileUpdate);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('profile-updated', handleProfileUpdate);
+    };
   }, []);
 
   const loadProfile = async (userId: string) => {
