@@ -273,6 +273,24 @@ const QuizResults = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Answer Summary */}
+                <div className="flex flex-wrap gap-4 text-sm p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <span className="text-muted-foreground">Your answer: </span>
+                    <span className={`font-semibold ${result.is_correct ? "text-success-foreground" : "text-destructive"}`}>
+                      {result.selected_option}. {result.options.find(o => o.option_label === result.selected_option)?.option_text || "Not answered"}
+                    </span>
+                  </div>
+                  {!result.is_correct && (
+                    <div>
+                      <span className="text-muted-foreground">Correct answer: </span>
+                      <span className="font-semibold text-success-foreground">
+                        {result.correct_option}. {result.options.find(o => o.option_label === result.correct_option)?.option_text}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Options */}
                 <div className="space-y-2">
                   {result.options.map((option) => {

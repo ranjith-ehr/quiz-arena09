@@ -93,12 +93,22 @@ const Quiz = () => {
         return;
       }
 
-      // Check if login is required
-      if (quizData.requires_login) {
+      // Check if login is required (for both requires_login and premium quizzes)
+      if (quizData.requires_login || quizData.is_premium) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          toast.error("Please login to take this quiz");
+          toast.error(quizData.is_premium 
+            ? "Please login and purchase this premium quiz to continue" 
+            : "Please login to take this quiz");
           navigate(`/auth?redirect=/quiz/${quizId}`);
+          return;
+        }
+        
+        // For premium quizzes, check if user has purchased (TODO: implement payment check)
+        if (quizData.is_premium) {
+          // For now, show message that premium quizzes require payment
+          toast.error("This is a premium quiz. Payment feature coming soon!");
+          navigate("/quizzes");
           return;
         }
       }
@@ -161,18 +171,30 @@ const Quiz = () => {
         isCorrect: boolean;
       }> = [];
 
+      // Get correct answers for each question
+      const { data: questionsWithAnswers } = await supabase
+        .from("questions")
+        .select("id, correct_option")
+        .in("id", questions.map(q => q.id));
+
+      const correctAnswersMap = new Map(
+        questionsWithAnswers?.map(q => [q.id, q.correct_option]) || []
+      );
+
       const responses = questions.map((q) => {
-        const selectedAnswer = answers[q.id] || "A";
-        const correctOption = q.options.find(opt => opt.option_label === q.options[0].option_label);
-        const selectedOption = q.options.find(opt => opt.option_label === selectedAnswer);
-        const isCorrect = false; // Placeholder since we don't have correct_option in this version
+        const selectedAnswer = answers[q.id] || "";
+        const correctAnswer = correctAnswersMap.get(q.id) || "";
+        const isCorrect = selectedAnswer === correctAnswer;
         
         if (isCorrect) correctCount++;
+
+        const selectedOption = q.options.find(opt => opt.option_label === selectedAnswer);
+        const correctOption = q.options.find(opt => opt.option_label === correctAnswer);
 
         questionResults.push({
           questionText: q.question_text,
           selectedOption: selectedOption?.option_text || selectedAnswer,
-          correctOption: correctOption?.option_text || "",
+          correctOption: correctOption?.option_text || correctAnswer,
           isCorrect,
         });
 
