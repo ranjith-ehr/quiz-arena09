@@ -363,6 +363,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_quiz_score: {
+        Args: { p_answers: Json; p_attempt_id: string }
+        Returns: Json
+      }
       get_quiz_questions_safe: {
         Args: { p_quiz_id: string }
         Returns: {

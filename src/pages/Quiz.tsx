@@ -162,68 +162,48 @@ const Quiz = () => {
       // Get user info for email
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Submit all answers and calculate score
-      let correctCount = 0;
-      const questionResults: Array<{
-        questionText: string;
-        selectedOption: string;
-        correctOption: string;
-        isCorrect: boolean;
-      }> = [];
-
-      // Get correct answers for each question
-      const { data: questionsWithAnswers } = await supabase
-        .from("questions")
-        .select("id, correct_option")
-        .in("id", questions.map(q => q.id));
-
-      const correctAnswersMap = new Map(
-        questionsWithAnswers?.map(q => [q.id, q.correct_option]) || []
-      );
-
-      const responses = questions.map((q) => {
-        const selectedAnswer = answers[q.id] || "";
-        const correctAnswer = correctAnswersMap.get(q.id) || "";
-        const isCorrect = selectedAnswer === correctAnswer;
-        
-        if (isCorrect) correctCount++;
-
-        const selectedOption = q.options.find(opt => opt.option_label === selectedAnswer);
-        const correctOption = q.options.find(opt => opt.option_label === correctAnswer);
-
-        questionResults.push({
-          questionText: q.question_text,
-          selectedOption: selectedOption?.option_text || selectedAnswer,
-          correctOption: correctOption?.option_text || correctAnswer,
-          isCorrect,
-        });
-
-        return {
-          attempt_id: attemptId,
-          question_id: q.id,
-          selected_option: selectedAnswer,
-          is_correct: isCorrect,
-        };
+      // Build answers object for the RPC
+      const answersObj: Record<string, string> = {};
+      questions.forEach((q) => {
+        answersObj[q.id] = answers[q.id] || "";
       });
 
-      const { error: responsesError } = await supabase
-        .from("question_responses")
-        .insert(responses);
+      // Call secure RPC to calculate score server-side
+      const { data: result, error: rpcError } = await supabase
+        .rpc("calculate_quiz_score", {
+          p_attempt_id: attemptId,
+          p_answers: answersObj
+        });
 
-      if (responsesError) throw responsesError;
+      if (rpcError) throw rpcError;
 
-      // Mark attempt as completed
-      const endTime = new Date();
-      const { error: updateError } = await supabase
-        .from("quiz_attempts")
-        .update({
-          is_completed: true,
-          end_time: endTime.toISOString(),
-          score: correctCount,
-        })
-        .eq("id", attemptId);
+      const { score: correctCount, totalQuestions, percentage, results: serverResults } = result as {
+        score: number;
+        totalQuestions: number;
+        percentage: number;
+        results: Array<{
+          questionId: string;
+          questionText: string;
+          selectedOption: string;
+          correctOption: string;
+          isCorrect: boolean;
+          explanation: string | null;
+        }>;
+      };
 
-      if (updateError) throw updateError;
+      // Build question results for email
+      const questionResults = serverResults.map((r) => {
+        const question = questions.find(q => q.id === r.questionId);
+        const selectedOpt = question?.options.find(opt => opt.option_label === r.selectedOption);
+        const correctOpt = question?.options.find(opt => opt.option_label === r.correctOption);
+        
+        return {
+          questionText: r.questionText,
+          selectedOption: selectedOpt?.option_text || r.selectedOption,
+          correctOption: correctOpt?.option_text || r.correctOption,
+          isCorrect: r.isCorrect,
+        };
+      });
 
       // Send email with results if user is logged in
       if (user?.email) {
@@ -234,20 +214,15 @@ const Quiz = () => {
             .eq("id", user.id)
             .single();
 
-          const startTime = new Date();
-          const timeTakenMs = endTime.getTime() - startTime.getTime();
-          const minutes = Math.floor(timeTakenMs / 60000);
-          const seconds = Math.floor((timeTakenMs % 60000) / 1000);
-
           await supabase.functions.invoke("send-quiz-results", {
             body: {
               email: user.email,
               userName: profile?.full_name || "User",
               quizTitle: quiz?.title || "Quiz",
               score: correctCount,
-              totalQuestions: questions.length,
-              percentage: (correctCount / questions.length) * 100,
-              timeTaken: `${minutes}m ${seconds}s`,
+              totalQuestions: totalQuestions,
+              percentage: percentage,
+              timeTaken: "N/A",
               results: questionResults,
             },
           });
