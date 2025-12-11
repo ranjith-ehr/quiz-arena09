@@ -30,31 +30,36 @@ const Auth = () => {
   const [isUpdatePassword, setIsUpdatePassword] = useState(false);
 
   const redirectTo = searchParams.get("redirect") || "/quizzes";
-  const resetToken = searchParams.get("reset");
+  const isRecoveryMode = searchParams.get("type") === "recovery";
 
   useEffect(() => {
-    // Check if this is a password reset callback
-    if (resetToken === "true") {
+    // Check if this is a password recovery callback from email link
+    if (isRecoveryMode) {
       setIsUpdatePassword(true);
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !isUpdatePassword) {
-        navigate(redirectTo);
-      }
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event:", event);
       if (event === "PASSWORD_RECOVERY") {
         setIsUpdatePassword(true);
-      } else if (session && (event === "SIGNED_IN" || event === "USER_UPDATED") && !isUpdatePassword) {
+      } else if (event === "SIGNED_IN" && !isRecoveryMode) {
+        // Only redirect if not in recovery mode
         navigate(redirectTo);
       }
     });
 
+    // Check existing session only if not in recovery mode
+    if (!isRecoveryMode) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          navigate(redirectTo);
+        }
+      });
+    }
+
     return () => subscription.unsubscribe();
-  }, [navigate, redirectTo, resetToken, isUpdatePassword]);
+  }, [navigate, redirectTo, isRecoveryMode]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +114,7 @@ const Auth = () => {
       }
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
+        redirectTo: `${window.location.origin}/auth?type=recovery`,
       });
       
       if (error) throw error;
