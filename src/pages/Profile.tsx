@@ -10,11 +10,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { AvatarCropper } from "@/components/AvatarCropper";
 
-const profileSchema = z.object({
-  fullName: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
-  email: z.string().email("Invalid email address").max(255, "Email must be less than 255 characters"),
-});
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -25,8 +23,12 @@ const Profile = () => {
   const [uploading, setUploading] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [croppedAvatarBlob, setCroppedAvatarBlob] = useState<Blob | null>(null);
+  
+  // Cropper state
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -57,12 +59,15 @@ const Profile = () => {
         .from("profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
-      setFullName(data?.full_name || "");
-      setAvatarPreview(data?.avatar_url || null);
+      
+      if (data) {
+        setProfile(data);
+        setFullName(data.full_name || "");
+        setAvatarPreview(data.avatar_url || null);
+      }
     } catch (error) {
       console.error("Error loading profile:", error);
     }
@@ -71,95 +76,95 @@ const Profile = () => {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("File size must be less than 2MB");
-        return;
-      }
       if (!file.type.startsWith("image/")) {
         toast.error("Please select an image file");
         return;
       }
-      setAvatarFile(file);
-      setAvatarPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const compressImage = async (file: File): Promise<File> => {
-    return new Promise((resolve) => {
+      
+      // Read and open cropper
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-
-          // Calculate new dimensions to maintain aspect ratio
-          const maxSize = 1024;
-          if (width > height && width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          } else if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressedFile = new File([blob], file.name, {
-                  type: "image/jpeg",
-                  lastModified: Date.now(),
-                });
-                resolve(compressedFile);
-              } else {
-                resolve(file);
-              }
-            },
-            "image/jpeg",
-            0.85
-          );
-        };
-        img.src = e.target?.result as string;
+      reader.onload = (event) => {
+        setImageToCrop(event.target?.result as string);
+        setCropperOpen(true);
       };
       reader.readAsDataURL(file);
+    }
+    // Reset input to allow re-selecting the same file
+    e.target.value = "";
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperOpen(false);
+    setImageToCrop(null);
+    
+    // Check if compressed image is still over 2MB, compress further if needed
+    let finalBlob = croppedBlob;
+    if (croppedBlob.size > MAX_FILE_SIZE) {
+      finalBlob = await compressBlob(croppedBlob);
+      toast.info("Image compressed to fit size limit");
+    }
+    
+    setCroppedAvatarBlob(finalBlob);
+    setAvatarPreview(URL.createObjectURL(finalBlob));
+  };
+
+  const compressBlob = async (blob: Blob): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxSize = 256; // Smaller size for better compression
+        canvas.width = maxSize;
+        canvas.height = maxSize;
+        
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, maxSize, maxSize);
+        }
+        
+        canvas.toBlob(
+          (compressedBlob) => resolve(compressedBlob || blob),
+          "image/jpeg",
+          0.7
+        );
+      };
+      img.src = URL.createObjectURL(blob);
     });
   };
 
-  const uploadAvatar = async () => {
-    if (!avatarFile || !user) return null;
+  const uploadAvatar = async (): Promise<string | null> => {
+    if (!croppedAvatarBlob || !user) return null;
 
     setUploading(true);
     try {
-      let fileToUpload = avatarFile;
-
-      // Compress if larger than 2MB
-      if (avatarFile.size > 2 * 1024 * 1024) {
-        fileToUpload = await compressImage(avatarFile);
-        toast.info("Image compressed to optimize size");
-      }
-
       // Delete old avatar if exists
       if (profile?.avatar_url) {
-        const oldPath = profile.avatar_url.split("/").slice(-2).join("/");
-        await supabase.storage.from("avatars").remove([oldPath]);
+        try {
+          const urlParts = profile.avatar_url.split("/avatars/");
+          if (urlParts[1]) {
+            await supabase.storage.from("avatars").remove([urlParts[1]]);
+          }
+        } catch (deleteError) {
+          console.log("Could not delete old avatar:", deleteError);
+        }
       }
 
       // Upload new avatar
-      const fileExt = fileToUpload.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}/${Date.now()}.jpg`;
       
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, fileToUpload);
+        .upload(fileName, croppedAvatarBlob, {
+          contentType: "image/jpeg",
+          upsert: true
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from("avatars")
@@ -167,6 +172,7 @@ const Profile = () => {
 
       return publicUrl;
     } catch (error: any) {
+      console.error("Failed to upload avatar:", error);
       toast.error("Failed to upload avatar: " + error.message);
       return null;
     } finally {
@@ -177,14 +183,9 @@ const Profile = () => {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log("Updating profile for user:", user?.id);
-    console.log("Full name:", fullName);
-    console.log("Current profile:", profile);
-    
-    // Validate inputs (email removed)
+    // Validate name
     try {
-      const nameSchema = z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters");
-      nameSchema.parse(fullName);
+      z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters").parse(fullName);
     } catch (error) {
       if (error instanceof z.ZodError) {
         error.errors.forEach((err) => toast.error(err.message));
@@ -194,41 +195,46 @@ const Profile = () => {
 
     setUpdating(true);
     try {
-      let avatarUrl = profile?.avatar_url;
+      let avatarUrl = profile?.avatar_url || null;
 
       // Upload avatar if changed
-      if (avatarFile) {
-        console.log("Uploading avatar file:", avatarFile.name);
+      if (croppedAvatarBlob) {
         const uploadedUrl = await uploadAvatar();
-        console.log("Uploaded avatar URL:", uploadedUrl);
         if (uploadedUrl) {
           avatarUrl = uploadedUrl;
+        } else if (croppedAvatarBlob) {
+          // Upload failed but we had a new avatar
+          toast.error("Avatar upload failed, but continuing with other changes");
         }
       }
 
-      console.log("Updating profile with:", { full_name: fullName, avatar_url: avatarUrl });
-      
-      // Upsert profile (insert if not exists, update if exists)
-      const { data, error: profileError } = await supabase
+      // Upsert profile
+      const { error: profileError } = await supabase
         .from("profiles")
         .upsert({
           id: user.id,
           full_name: fullName,
           avatar_url: avatarUrl,
-        })
-        .select();
-
-      console.log("Update result:", { data, error: profileError });
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id'
+        });
       
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error("Profile update error:", profileError);
+        throw profileError;
+      }
 
       toast.success("Profile updated successfully!");
-      await loadProfile(user.id);
-      setAvatarFile(null);
       
-      // Dispatch event to refresh profile in Navbar
+      // Reload profile to get fresh data
+      await loadProfile(user.id);
+      setCroppedAvatarBlob(null);
+      
+      // Dispatch event to refresh profile in Navbar and other components
       window.dispatchEvent(new CustomEvent('profile-updated'));
     } catch (error: any) {
+      console.error("Failed to update profile:", error);
       toast.error("Failed to update profile: " + error.message);
     } finally {
       setUpdating(false);
@@ -293,7 +299,10 @@ const Profile = () => {
               {/* Avatar Section */}
               <div className="flex flex-col items-center gap-4">
                 <Avatar className="h-32 w-32">
-                  <AvatarImage src={avatarPreview || profile?.avatar_url} alt={fullName} />
+                  <AvatarImage 
+                    src={avatarPreview || undefined} 
+                    alt={fullName || "User avatar"} 
+                  />
                   <AvatarFallback className="text-3xl">{getUserInitials()}</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col items-center gap-2">
@@ -310,7 +319,9 @@ const Profile = () => {
                     className="hidden"
                     onChange={handleAvatarChange}
                   />
-                  <p className="text-xs text-muted-foreground">Max size: 2MB</p>
+                  <p className="text-xs text-muted-foreground">
+                    Max size: 2MB. Image will be cropped to a circle.
+                  </p>
                 </div>
               </div>
 
@@ -368,7 +379,7 @@ const Profile = () => {
                   {updating || uploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
+                      {uploading ? "Uploading..." : "Saving..."}
                     </>
                   ) : (
                     "Save Changes"
@@ -386,6 +397,19 @@ const Profile = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Avatar Cropper Modal */}
+      {imageToCrop && (
+        <AvatarCropper
+          open={cropperOpen}
+          onClose={() => {
+            setCropperOpen(false);
+            setImageToCrop(null);
+          }}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 };
