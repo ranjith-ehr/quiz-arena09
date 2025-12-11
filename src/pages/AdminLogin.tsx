@@ -24,7 +24,6 @@ const AdminLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,68 +42,33 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        // Sign up
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/admin/dashboard`
-          }
-        });
+      // Sign in only - no public signup
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        toast.success("Account created successfully! Logging you in...");
-        
-        // Auto login after signup
-        if (data.user) {
-          // Check if user has admin role
-          const { data: roleData, error: roleError } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", data.user.id)
-            .eq("role", "admin")
-            .maybeSingle();
+      // Check if user has admin role
+      const { data: roleData, error: roleError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
 
-          if (roleError || !roleData) {
-            await supabase.auth.signOut();
-            toast.error("Access denied. Admin privileges required.");
-            setLoading(false);
-            return;
-          }
-
-          navigate("/admin/dashboard");
-        }
-      } else {
-        // Sign in
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) throw error;
-
-        // Check if user has admin role
-        const { data: roleData, error: roleError } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", data.user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-
-        if (roleError || !roleData) {
-          await supabase.auth.signOut();
-          toast.error("Access denied. Admin privileges required.");
-          setLoading(false);
-          return;
-        }
-
-        toast.success("Welcome back, Admin!");
-        navigate("/admin/dashboard");
+      if (roleError || !roleData) {
+        await supabase.auth.signOut();
+        toast.error("Access denied. Admin privileges required.");
+        setLoading(false);
+        return;
       }
+
+      toast.success("Welcome back, Admin!");
+      navigate("/admin/dashboard");
     } catch (error: any) {
-      toast.error(error.message || "Operation failed. Please try again.");
+      toast.error(error.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -127,13 +91,9 @@ const AdminLogin = () => {
             <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4">
               <BookOpen className="w-8 h-8 text-primary-foreground" />
             </div>
-            <CardTitle className="text-2xl font-bold">
-              {isSignUp ? "Admin Sign Up" : "Admin Login"}
-            </CardTitle>
+            <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
             <CardDescription>
-              {isSignUp 
-                ? "Create your admin account" 
-                : "Enter your credentials to access the admin panel"}
+              Enter your credentials to access the admin panel
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -161,19 +121,7 @@ const AdminLogin = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading 
-                  ? (isSignUp ? "Creating account..." : "Logging in...") 
-                  : (isSignUp ? "Sign Up" : "Login")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setIsSignUp(!isSignUp)}
-              >
-                {isSignUp 
-                  ? "Already have an account? Login" 
-                  : "Need an account? Sign Up"}
+                {loading ? "Logging in..." : "Login"}
               </Button>
             </form>
           </CardContent>
