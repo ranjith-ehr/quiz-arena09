@@ -208,14 +208,14 @@ const Profile = () => {
 
       console.log("Updating profile with:", { full_name: fullName, avatar_url: avatarUrl });
       
-      // Update profile
+      // Upsert profile (insert if not exists, update if exists)
       const { data, error: profileError } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          id: user.id,
           full_name: fullName,
           avatar_url: avatarUrl,
         })
-        .eq("id", user.id)
         .select();
 
       console.log("Update result:", { data, error: profileError });
@@ -243,7 +243,7 @@ const Profile = () => {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/auth?mode=reset`,
+        redirectTo: `${window.location.origin}/auth?type=recovery`,
       });
 
       if (error) throw error;
