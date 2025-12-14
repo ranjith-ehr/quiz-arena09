@@ -87,19 +87,27 @@ const QuizResults = () => {
 
       if (responsesError) throw responsesError;
 
-      // Fetch options for each question
-      const questionIds = responsesData?.map((r: any) => r.questions.id) || [];
-      const { data: optionsData, error: optionsError } = await supabase
-        .from("question_options")
-        .select("*")
-        .in("question_id", questionIds);
+      // Filter out responses where the question no longer exists
+      const validResponses = responsesData?.filter((r: any) => r.questions !== null) || [];
 
-      if (optionsError) throw optionsError;
+      // Fetch options for each question
+      const questionIds = validResponses.map((r: any) => r.questions.id);
+      
+      let optionsData: any[] = [];
+      if (questionIds.length > 0) {
+        const { data, error: optionsError } = await supabase
+          .from("question_options")
+          .select("*")
+          .in("question_id", questionIds);
+
+        if (optionsError) throw optionsError;
+        optionsData = data || [];
+      }
 
       // Calculate score
-      const correctCount = responsesData?.filter((r: any) => 
+      const correctCount = validResponses.filter((r: any) => 
         r.selected_option === r.questions.correct_option
-      ).length || 0;
+      ).length;
 
       // Update attempt with score if not already set
       if (attemptData.score === null) {
@@ -114,9 +122,9 @@ const QuizResults = () => {
       setAttempt(attemptData);
 
       // Build results with options
-      const resultsWithOptions = responsesData?.map((response: any) => {
+      const resultsWithOptions = validResponses.map((response: any) => {
         const question = response.questions;
-        const questionOptions = optionsData?.filter(
+        const questionOptions = optionsData.filter(
           (opt: any) => opt.question_id === question.id
         ).sort((a: any, b: any) => a.option_label.localeCompare(b.option_label));
 
@@ -128,9 +136,9 @@ const QuizResults = () => {
           correct_option: question.correct_option,
           is_correct: response.selected_option === question.correct_option,
           explanation: question.explanation,
-          options: questionOptions || [],
+          options: questionOptions,
         };
-      }) || [];
+      });
 
       setResults(resultsWithOptions);
     } catch (error: any) {
