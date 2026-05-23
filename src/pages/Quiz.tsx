@@ -93,24 +93,21 @@ const Quiz = () => {
         return;
       }
 
-      // Check if login is required (for both requires_login and premium quizzes)
-      if (quizData.requires_login || quizData.is_premium) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          toast.error(quizData.is_premium 
-            ? "Please login and purchase this premium quiz to continue" 
-            : "Please login to take this quiz");
-          navigate(`/auth?redirect=/quiz/${quizId}`);
-          return;
-        }
-        
-        // For premium quizzes, check if user has purchased (TODO: implement payment check)
-        if (quizData.is_premium) {
-          // For now, show message that premium quizzes require payment
-          toast.error("This is a premium quiz. Payment feature coming soon!");
-          navigate("/quizzes");
-          return;
-        }
+      // Login is required for all quizzes
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error(quizData.is_premium
+          ? "Please login and purchase this premium quiz to continue"
+          : "Please login to take this quiz");
+        navigate(`/auth?redirect=/quiz/${quizId}`);
+        return;
+      }
+
+      // For premium quizzes, check if user has purchased (TODO: implement payment check)
+      if (quizData.is_premium) {
+        toast.error("This is a premium quiz. Payment feature coming soon!");
+        navigate("/quizzes");
+        return;
       }
 
       setQuiz(quizData);
@@ -123,13 +120,12 @@ const Quiz = () => {
       if (questionsError) throw questionsError;
       setQuestions((questionsData || []) as QuizQuestion[]);
 
-      // Create quiz attempt
-      const { data: user } = await supabase.auth.getUser();
+      // Create quiz attempt (requires authenticated user)
       const { data: attempt, error: attemptError } = await supabase
         .from("quiz_attempts")
         .insert({
           quiz_id: quizId,
-          user_id: user.user?.id || null,
+          user_id: session.user.id,
           total_questions: questionsData?.length || 0,
         })
         .select()
