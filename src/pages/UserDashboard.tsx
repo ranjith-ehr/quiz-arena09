@@ -42,7 +42,7 @@ interface AttemptData {
   quizzes: {
     title: string;
     categories: { name: string };
-  };
+  } | null;
 }
 
 interface Stats {
@@ -93,9 +93,9 @@ const UserDashboard = () => {
         .from("quiz_attempts")
         .select(`
           *,
-          quizzes!inner(
+          quizzes(
             title,
-            categories!inner(name)
+            categories(name)
           )
         `)
         .eq("user_id", userId)
@@ -359,13 +359,15 @@ const UserDashboard = () => {
                             <XCircle className="w-5 h-5 text-destructive" />
                           )}
                           <div>
-                            <p className="font-medium">{attempt.quizzes?.title}</p>
+                            <p className="font-medium">{attempt.quizzes?.title || "Deleted Quiz"}</p>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Calendar className="w-3 h-3" />
                               {format(new Date(attempt.created_at), "MMM d, yyyy")}
-                              <Badge variant="outline" className="ml-2">
-                                {attempt.quizzes?.categories?.name}
-                              </Badge>
+                              {attempt.quizzes?.categories?.name && (
+                                <Badge variant="outline" className="ml-2">
+                                  {attempt.quizzes.categories.name}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>
